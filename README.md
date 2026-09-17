@@ -140,6 +140,9 @@ information for manual removal. This package has no persistent daemon or janitor
 
 ## Local development
 
+Agent-assisted contributors and consumers can follow [AGENTS.md](AGENTS.md) for
+integration, lifecycle and verification guidance.
+
 Use an uncommitted temporary Go workspace containing the consumer and this
 module to test unpublished changes. Keep absolute-path `replace` directives out
 of the consumer's committed `go.mod`. Consumers and Docker builds can otherwise
