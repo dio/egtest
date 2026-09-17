@@ -16,14 +16,21 @@ func (c *Cluster) kube(ctx context.Context, input []byte, args ...string) ([]byt
 
 // Kubectl runs against this cluster's private kubeconfig. The caller owns the
 // returned bytes and must avoid logging Secret or raw Envoy configuration data.
-// Context/config overrides and kubectl config mutations are deliberately rejected.
+// Kubeconfig, context, cluster, server and TLS-verification overrides are rejected.
+// Authentication/impersonation flags remain caller-controlled.
 func (c *Cluster) Kubectl(ctx context.Context, input []byte, args ...string) ([]byte, error) {
 	for _, arg := range args {
 		if arg == "--" {
 			break
 		}
-		if strings.HasPrefix(arg, "--kubeconfig") || strings.HasPrefix(arg, "--context") || strings.HasPrefix(arg, "--cluster") || strings.HasPrefix(arg, "--server") || strings.HasPrefix(arg, "--insecure-skip-tls-verify") || strings.HasPrefix(arg, "-s") {
-			return nil, errors.New("egtest: kubectl connection overrides are not allowed")
+		for _, flag := range []string{"--kubeconfig", "--context", "--cluster", "--server", "--insecure-skip-tls-verify"} {
+			if arg == flag || strings.HasPrefix(arg, flag+"=") {
+				return nil, errors.New("egtest: kubectl cluster selection and TLS-verification overrides are not allowed")
+			}
+		}
+		// kubectl accepts -s URL, -s=URL and -sURL.
+		if strings.HasPrefix(arg, "-s") {
+			return nil, errors.New("egtest: kubectl server override is not allowed")
 		}
 	}
 	if len(args) > 0 && args[0] == "config" {

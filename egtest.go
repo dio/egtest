@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -27,10 +28,14 @@ import (
 
 var ErrClosed = errors.New("egtest: cluster is closed")
 
+var clusterPrefix = regexp.MustCompile(`^[a-z][a-z0-9-]{0,23}$`)
+
 // Options configures one private single-server cluster. Versions are required:
 // the consuming project owns qualification of its Kubernetes/EG pairing.
 type Options struct {
-	EGVersion  string
+	EGVersion string
+	// K3SVersion accepts image-tag (-k3s) or GitVersion (+k3s) spelling.
+	// Info reports the canonical image-tag spelling.
 	K3SVersion string
 	// HelmValues is passed on stdin, never logged or persisted by egtest.
 	HelmValues []byte
@@ -131,10 +136,11 @@ func openWithTools(ctx context.Context, opts Options, tools map[string]string) (
 	if opts.EGVersion == "" || opts.K3SVersion == "" {
 		return nil, errors.New("egtest: explicit EGVersion and K3SVersion are required")
 	}
+	opts.K3SVersion = strings.Replace(opts.K3SVersion, "+k3s", "-k3s", 1)
 	if opts.Prefix == "" {
 		opts.Prefix = "egtest"
 	}
-	if !regexp.MustCompile(`^[a-z][a-z0-9-]{0,23}$`).MatchString(opts.Prefix) {
+	if !clusterPrefix.MatchString(opts.Prefix) {
 		return nil, errors.New("egtest: prefix must be 1–24 lowercase letters, digits or hyphens, starting with a letter")
 	}
 	if opts.Timeout == 0 {
@@ -211,10 +217,9 @@ func (c *Cluster) setup(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("resolve API port: %w", err)
 	}
-	endpoint := strings.TrimSpace(string(raw))
-	host, port, err := net.SplitHostPort(endpoint)
-	if err != nil || host != "127.0.0.1" || port == "0" || port == "" {
-		return errors.New("egtest: owned API must have an allocated loopback port")
+	endpoint, err := loopbackEndpoint(raw)
+	if err != nil {
+		return err
 	}
 	if _, err := c.kube(ctx, nil, "config", "set-cluster", "k3d-"+c.info.Name, "--server=https://"+endpoint); err != nil {
 		return err
@@ -234,6 +239,21 @@ func (c *Cluster) setup(ctx context.Context) error {
 	}
 	c.info.InstallationVerified = true
 	return nil
+}
+
+func loopbackEndpoint(raw []byte) (string, error) {
+	for _, line := range strings.Split(string(raw), "\n") {
+		endpoint := strings.TrimSpace(line)
+		host, port, err := net.SplitHostPort(endpoint)
+		if err != nil || host != "127.0.0.1" {
+			continue
+		}
+		n, err := strconv.Atoi(port)
+		if err == nil && n > 0 && n <= 65535 {
+			return endpoint, nil
+		}
+	}
+	return "", errors.New("egtest: owned API has no allocated IPv4 loopback port")
 }
 
 func (c *Cluster) clusterNames(ctx context.Context) ([]string, error) {
@@ -278,7 +298,10 @@ func (c *Cluster) Close() error {
 		c.ops.Wait()
 		ctx, cancel := context.WithTimeout(context.Background(), c.opts.CleanupTimeout)
 		defer cancel()
-		for _, f := range c.forwards {
+		c.mu.Lock()
+		forwards := append([]*Forward(nil), c.forwards...)
+		c.mu.Unlock()
+		for _, f := range forwards {
 			c.closeErr = errors.Join(c.closeErr, f.Close())
 		}
 		cleanup := "verified"

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"slices"
 	"sync"
 	"time"
 )
@@ -13,11 +14,12 @@ import (
 // Forward owns one kubectl process. Close is idempotent; Cluster.Close also
 // closes every forward. URL is ready when PortForward returns successfully.
 type Forward struct {
-	URL    string
-	cancel context.CancelFunc
-	done   chan struct{}
-	once   sync.Once
-	err    error
+	URL     string
+	cancel  context.CancelFunc
+	done    chan struct{}
+	once    sync.Once
+	err     error
+	release func()
 }
 
 func (f *Forward) Close() error {
@@ -25,6 +27,10 @@ func (f *Forward) Close() error {
 		f.cancel()
 		select {
 		case <-f.done:
+			if f.release != nil {
+				f.release()
+				f.release = nil
+			}
 		case <-time.After(3 * time.Second):
 			f.err = errors.New("egtest: port-forward did not stop")
 		}
@@ -73,6 +79,13 @@ func (c *Cluster) PortForward(ctx context.Context, namespace, target string, rem
 	defer stop()
 	life, cancel := context.WithCancel(c.ctx)
 	f := &Forward{cancel: cancel, done: make(chan struct{})}
+	f.release = func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if i := slices.Index(c.forwards, f); i >= 0 {
+			c.forwards = slices.Delete(c.forwards, i, i+1)
+		}
+	}
 	cmd := exec.CommandContext(life, c.tools["kubectl"], "--kubeconfig", c.info.Kubeconfig, "--context", "k3d-"+c.info.Name, "-n", namespace, "port-forward", "--address=127.0.0.1", target, fmt.Sprintf(":%d", remotePort))
 	cmd.WaitDelay = time.Second
 	out := &forwardOutput{}

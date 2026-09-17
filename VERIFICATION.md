@@ -44,3 +44,26 @@ tooling without a local workspace or replace directive.
 This evidence qualifies cluster installation/removal on the CI Linux host.
 It does not qualify APIx forwarding, dynamic-module loading, a shared-cluster
 wrapper, or live installation on macOS.
+
+## Review corrections
+
+The local `make check` regression suite verifies these corrections:
+
+- Kubectl matches blocked long options by exact name or `name=value`, allowing
+  `--server-side`, `--server-side=true` and `--server-side=false` while retaining
+  rejection of server/context/kubeconfig/cluster and TLS-verification overrides.
+- Docker port parsing selects a valid allocated IPv4 loopback mapping from
+  multiline output and refuses wildcard-only, zero or invalid ports.
+- Explicitly closed forwards are unregistered. Concurrent forward/cluster close
+  uses a protected snapshot and passes the race detector.
+- `K3SVersion` accepts both `-k3s` and `+k3s` input. Normalization happens before
+  Docker image selection; the existing server-version comparison already accepted
+  the GitVersion spelling. The normalized version is returned in `Info`.
+
+The prefix expression is compiled once, and Kubectl's documentation now identifies
+exactly which overrides are restricted. Authentication flags remain caller-owned.
+
+The live gate remains installation/removal only. `PortForward`, `WaitProgrammed`,
+`WaitDeployment`, `ImportImages`, and `Keep` have no dedicated live qualification;
+checks of their behavior use fake executables where covered. There is still no
+live macOS/arm64 installation or consumer-forwarding claim.

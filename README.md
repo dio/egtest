@@ -25,7 +25,9 @@ application or extension compatibility.
 
 Requires Go 1.25+ and the `docker`, `k3d`, `kubectl`, and `helm` executables.
 Docker must be running. Consumers supply explicit EG and k3s version pins and
-qualify that pair on their test host.
+qualify that pair on their test host. `K3SVersion` accepts either the image-tag
+spelling (`v1.33.13-k3s2`) or server GitVersion spelling (`v1.33.13+k3s2`);
+`Info()` reports the image-tag spelling.
 
 ```go
 //go:embed testdata/helm-values.yaml
@@ -115,6 +117,15 @@ There is no run-wide shared cluster or CLI wrapper yet. Namespaces do not isolat
 cluster-wide CRDs, GatewayClasses or controller settings; a private cluster per
 suite makes ownership explicit. Testify suites can consume `Open` through a thin
 adapter without making testify a library dependency.
+
+For server-side apply, use the scoped command API:
+
+```go
+_, err := cluster.Kubectl(ctx, manifest, "apply", "--server-side", "-f", "-")
+```
+
+Cluster-selection and TLS-verification overrides are rejected; application flags
+such as `--server-side` and caller-selected authentication flags remain available.
 
 ## Failures, diagnostics and removal
 

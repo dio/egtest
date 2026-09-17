@@ -23,7 +23,7 @@ case "$tool" in
 docker)
  case "$1" in
  info) printf arm64 ;;
- port) printf '127.0.0.1:65432\n' ;;
+ port) if [ -f "$base/port-mappings" ]; then /bin/cat "$base/port-mappings"; else printf '127.0.0.1:65432\n'; fi ;;
  ps) if [ -f "$base/leftover" ]; then printf leftover; fi ;;
  esac ;;
 k3d)
@@ -289,14 +289,128 @@ func TestKubectlRejectsConnectionOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = c.Close() })
-	for _, flag := range []string{"--context=other", "--kubeconfig=other", "--server=https://elsewhere", "--cluster=other", "-shttps://elsewhere", "--insecure-skip-tls-verify"} {
+	for _, flag := range []string{"--context", "--context=other", "--kubeconfig", "--kubeconfig=other", "--server", "--server=https://elsewhere", "--cluster", "--cluster=other", "-s", "-s=https://elsewhere", "-shttps://elsewhere", "--insecure-skip-tls-verify", "--insecure-skip-tls-verify=true"} {
 		if _, err := c.Kubectl(t.Context(), nil, "get", "pods", flag); err == nil {
 			t.Fatalf("accepted %s", flag)
+		}
+	}
+	for _, flag := range []string{"--server-side", "--server-side=true", "--server-side=false"} {
+		if _, err := c.Kubectl(t.Context(), []byte("manifest"), "apply", "-f", "-", flag); err != nil {
+			t.Fatalf("refused server-side apply: %v", err)
 		}
 	}
 	// Flags after the exec separator belong to the remote command.
 	if _, err := c.Kubectl(t.Context(), nil, "exec", "pod/example", "--", "program", "--context=application"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSetupNormalizesK3SVersionAndSelectsIPv4Mapping(t *testing.T) {
+	tools, dir := fakeTools(t)
+	if err := os.WriteFile(filepath.Join(dir, "port-mappings"), []byte("[::]:65432\n127.0.0.1:65432\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opts := options()
+	opts.K3SVersion = "v1.33.13+k3s2"
+	c, err := openWithTools(t.Context(), opts, tools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	if c.Info().K3SVersion != "v1.33.13-k3s2" {
+		t.Fatal("version not canonicalized")
+	}
+	commands := read(t, filepath.Join(dir, "commands"))
+	if !strings.Contains(commands, "--image rancher/k3s:v1.33.13-k3s2") {
+		t.Fatal("invalid Docker image spelling")
+	}
+	if !strings.Contains(commands, "--server=https://127.0.0.1:65432") {
+		t.Fatal("wrong kubeconfig endpoint")
+	}
+}
+
+func TestLoopbackEndpoint(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		{"127.0.0.1:12345\n", "127.0.0.1:12345"},
+		{"[::]:12345\n127.0.0.1:12345\n", "127.0.0.1:12345"},
+		{"127.0.0.1:12345\n[::]:12345\n", "127.0.0.1:12345"},
+		{"\n 127.0.0.1:12345 \r\n", "127.0.0.1:12345"},
+		{"0.0.0.0:12345\n[::]:12345\n", ""},
+		{"127.0.0.1:0\n", ""},
+		{"127.0.0.1:65536\n", ""},
+		{"127.0.0.1:service\n", ""},
+		{"", ""},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			got, err := loopbackEndpoint([]byte(tc.raw))
+			if got != tc.want || (err == nil) != (tc.want != "") {
+				t.Fatalf("got %q, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestClosedForwardsReleaseOwnership(t *testing.T) {
+	tools, _ := fakeTools(t)
+	c, err := openWithTools(t.Context(), options(), tools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := c.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	for range 8 {
+		f, err := c.PortForward(t.Context(), "default", "service/example", 8080)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+		c.mu.Lock()
+		count := len(c.forwards)
+		c.mu.Unlock()
+		if count != 0 {
+			t.Fatal("closed forward remains registered")
+		}
+	}
+	var forwards []*Forward
+	for range 4 {
+		f, err := c.PortForward(t.Context(), "default", "service/example", 8080)
+		if err != nil {
+			t.Fatal(err)
+		}
+		forwards = append(forwards, f)
+	}
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for _, f := range forwards {
+		wg.Go(func() {
+			<-start
+			if err := f.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Go(func() {
+		<-start
+		if err := c.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	close(start)
+	wg.Wait()
+	c.mu.Lock()
+	count := len(c.forwards)
+	c.mu.Unlock()
+	if count != 0 {
+		t.Fatal("concurrent shutdown retained closed forwards")
 	}
 }
 
