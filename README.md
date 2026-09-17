@@ -28,6 +28,9 @@ Docker must be running. Consumers supply explicit EG and k3s version pins and
 qualify that pair on their test host.
 
 ```go
+//go:embed testdata/helm-values.yaml
+var helmValues []byte
+
 func TestGateway(t *testing.T) {
     if os.Getenv("RUN_EG") != "1" {
         t.Skip("set RUN_EG=1 to create a private cluster")
@@ -35,7 +38,7 @@ func TestGateway(t *testing.T) {
     cluster := egtest.New(t, egtest.Options{
         EGVersion:  "v1.9.1",
         K3SVersion: "v1.33.13-k3s2",
-        HelmValues: []byte("config:\n  envoyGateway:\n    extensionApis:\n      enableEnvoyPatchPolicy: true\n"),
+        HelmValues: helmValues,
     })
     // Build images in your project, then import their existing local tags.
     if err := cluster.ImportImages(t.Context(), "my-proxy:test"); err != nil {
@@ -51,8 +54,22 @@ func TestGateway(t *testing.T) {
 }
 ```
 
-Import `github.com/dio/egtest`, `os`, and `testing`; supply your project's
-`gatewayManifest`. The version pins above passed the Linux CI installation gate;
+Import `_ "embed"`, `github.com/dio/egtest`, `os`, and `testing`; supply your
+project's `gatewayManifest`. Store Helm configuration in
+[`testdata/helm-values.yaml`](testdata/helm-values.yaml):
+
+```yaml
+config:
+  envoyGateway:
+    extensionApis:
+      enableEnvoyPatchPolicy: true
+```
+
+Embedding keeps the fixture available in compiled test binaries without relying
+on the working directory. `HelmValues` accepts `[]byte`, so generated values also
+work; the library does not impose a filesystem or embed your application's secrets.
+
+The version pins above passed the Linux CI installation gate;
 application behavior still needs its own tests. `New` registers cleanup on the
 parent test, so the cluster remains alive
 through parallel subtests. Do not use `defer cluster.Close()` on a parent with

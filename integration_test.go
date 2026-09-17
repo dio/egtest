@@ -1,6 +1,7 @@
 package egtest_test
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"os"
@@ -8,6 +9,9 @@ import (
 
 	"github.com/dio/egtest"
 )
+
+//go:embed testdata/helm-values.yaml
+var helmValues []byte
 
 func TestInstallLive(t *testing.T) {
 	if os.Getenv("EGTEST_INTEGRATION") != "1" {
@@ -40,7 +44,7 @@ func TestInstallLive(t *testing.T) {
 	c, err = egtest.Open(t.Context(), egtest.Options{
 		EGVersion:  os.Getenv("EGTEST_EG_VERSION"),
 		K3SVersion: os.Getenv("EGTEST_K3S_VERSION"),
-		HelmValues: []byte("config:\n  envoyGateway:\n    extensionApis:\n      enableEnvoyPatchPolicy: true\n"),
+		HelmValues: helmValues,
 	})
 	if err != nil {
 		var setup *egtest.SetupError
