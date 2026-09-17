@@ -21,7 +21,7 @@ jobs:
       - name: Verify formatting
         run: test -z "$(gofmt -l .)"
 
-  install:
+  live:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -32,7 +32,7 @@ jobs:
           cache: false
       - name: Install pinned cluster tools
         run: bash .github/scripts/install-tools.sh
-      - name: Qualify real cluster installation and cleanup
+      - name: Qualify library operations against real clusters
         env:
           EGTEST_EG_VERSION: v1.9.1
           EGTEST_K3S_VERSION: v1.33.13-k3s2
@@ -42,6 +42,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: installation-result
+          name: live-result
           path: ${{ runner.temp }}/egtest-result.json
           if-no-files-found: warn

@@ -9,7 +9,7 @@ cluster adoption, registry publishing, or testify dependency.
 
 This module is experimental. CI verifies unit/race tests on Linux and macOS and
 real EG installation/cleanup on Linux. Application forwarding remains a consumer
-responsibility; see [the verification record](VERIFICATION.md).
+responsibility; see [testing and coverage](#testing).
 
 ## Install
 
@@ -178,26 +178,40 @@ module to test unpublished changes. Keep absolute-path `replace` directives out
 of the consumer's committed `go.mod`. Consumers and Docker builds can otherwise
 use the published revision through normal Go module tooling.
 
-## Verification
+## Testing
 
-CI runs vet, race tests and formatting checks on Linux and macOS with Go 1.25 and
-1.27. A separate Linux/amd64 job installs pinned k3d, kubectl and Helm, creates
-the real cluster, verifies installation and removal, and uploads a safe JSON
-result. All action references use the official releases checked at publication:
-checkout `v7.0.1`, setup-go `v7.0.0`, and upload-artifact `v7.0.1`.
+[GitHub Actions](https://github.com/dio/egtest/actions/workflows/test.yaml) is the
+source for current results. The [workflow](.github/workflows/test.yaml) defines
+platforms, Go versions and the live version pair; the
+[tool installer](.github/scripts/install-tools.sh) pins cluster tooling.
 
 ```sh
 make check
-# Expensive; creates one real cluster and requires working Docker/k3d/Helm.
+# Creates real clusters; requires working Docker, k3d, kubectl and Helm.
 EGTEST_EG_VERSION=v1.9.1 EGTEST_K3S_VERSION=v1.33.13-k3s2 make integration
 ```
 
-Unit tests use private fake executables, never real cluster commands. They cover
-partial creation/Helm failure, private command scoping, image import, port-forward
-lifetime and early exit, cancellation, concurrent close, keep-for-debug, cleanup
-failure, generation checks and ancestor isolation. The gated integration test
-qualifies installation and cleanup only. Neither skipped tests nor fake processes
-qualify a live version pair, application forwarding, or a platform.
+The unit jobs run vet, race tests and formatting checks on Linux and macOS.
+Tests use private fake executables to exercise lifecycle, scoping, cancellation,
+concurrency, readiness conditions and error handling.
+
+The separate Linux/amd64 live job exercises installation and verified removal,
+`Apply` and scoped server-side `Kubectl`, `ImportImages` with a digest-pinned
+backend and `imagePullPolicy: Never`, `WaitDeployment` for the backend and
+controller, and `WaitProgrammed` for a Gateway and EnvoyPatchPolicy. It forwards
+the generated Envoy service, checks a fixed backend response through the returned
+URL, and verifies that closing the forward stops its listener. A second cluster
+checks `Keep` retention, then explicitly removes and verifies retained resources.
+The job uploads an allowlisted JSON result for these checks.
+
+Live cluster operations on macOS/arm64 remain unqualified; the macOS jobs run
+fake-process tests only. Installation requires registry access for infrastructure
+images; the imported backend runs without a registry pull.
+
+Consumers own testing their application behavior: policy enforcement, module
+loading, observations, and backend receipt/non-receipt. The generic connectivity
+fixture qualifies library operations, not consumer applications. Skipped tests
+and fake-process tests are not live qualification evidence.
 
 ## Origin
 

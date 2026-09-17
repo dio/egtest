@@ -1,7 +1,8 @@
 # Working with egtest
 
-Read [README.md](README.md) for the public API and
-[VERIFICATION.md](VERIFICATION.md) for actual evidence and its limits.
+Read [README.md](README.md) for the public API and testing coverage. Use
+[GitHub Actions](https://github.com/dio/egtest/actions/workflows/test.yaml) for
+current results and per-run live-operation and cleanup evidence.
 
 ## Purpose and boundaries
 
@@ -73,17 +74,18 @@ Run `make check` for Go changes: vet and race-enabled tests. Add regression test
 for lifecycle, isolation, concurrency, cancellation or error-handling changes.
 Fake executable tests must never reach real Docker/Kubernetes tools.
 
-For installation changes, run the live gate on a suitable host or in CI:
+For cluster-operation changes, run the live gate on a suitable host or in CI:
 
 ```sh
 EGTEST_EG_VERSION=v1.9.1 EGTEST_K3S_VERSION=v1.33.13-k3s2 make integration
 ```
 
-This creates and removes real resources. The CI install job uploads an allowlisted
+This creates and removes real resources. The CI live job uploads an allowlisted
 JSON result. Inspect the job and cleanup evidence before claiming success.
-Record newly verified platforms/version pairs and meaningful failures/corrections
-in VERIFICATION.md; do not turn skipped/fake tests into live qualification.
+Keep coverage limits in the README accurate when tests change. Use CI results
+and artifacts for run-specific evidence rather than maintaining a manual run
+diary; do not turn skipped/fake tests into live qualification.
 
 When changing GitHub Actions, check every `uses:` reference against the official
 release, pin the selected version, and verify the workflow. Keep the unit/race
-matrix and the separate real installation/cleanup job intact.
+matrix and the separate live-operation/cleanup job intact.

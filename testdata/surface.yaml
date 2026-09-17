@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: backend}
+  template:
+    metadata:
+      labels: {app: backend}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: backend
+          image: '{{.BackendImage}}'
+          imagePullPolicy: Never
+          command: [sh, -ec]
+          args:
+            - |
+              mkdir -p /tmp/www
+              printf 'egtest-connected\n' > /tmp/www/index.html
+              exec httpd -f -p 8080 -h /tmp/www
+          readinessProbe:
+            httpGet: {path: /, port: 8080}
+            periodSeconds: 1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: default
+spec:
+  selector: {app: backend}
+  ports:
+    - {name: http, port: 8080, targetPort: 8080}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: smoke
+  namespace: default
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: egtest
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: smoke
+  namespace: default
+spec:
+  gatewayClassName: egtest
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: smoke
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: smoke
+  namespace: default
+spec:
+  parentRefs:
+    - name: smoke
+  rules:
+    - backendRefs:
+        - name: backend
+          port: 8080
+---
+# Exercise policy readiness without introducing any consumer behavior.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: smoke
+  namespace: default
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: smoke
+  type: JSONPatch
+  jsonPatches:
+    - type: type.googleapis.com/envoy.config.listener.v3.Listener
+      name: tcp-8080
+      operation:
+        op: add
+        path: /metadata
+        value:
+          filter_metadata:
+            egtest: {smoke: true}

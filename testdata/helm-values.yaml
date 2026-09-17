@@ -2,3 +2,6 @@ config:
   envoyGateway:
     extensionApis:
       enableEnvoyPatchPolicy: true
+    runtimeFlags:
+      enabled:
+        - XDSNameSchemeV2

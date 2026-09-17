@@ -1,6 +1,6 @@
 ---
 name: use-egtest
-description: Integrate github.com/dio/egtest into a Go project's Envoy Gateway tests, or replace duplicated k3d/EG lifecycle helpers with the library. Use for consumer setup, embedded Helm fixtures, cleanup, and CI installation checks; not for general Kubernetes deployment.
+description: Integrate github.com/dio/egtest into a Go project's Envoy Gateway tests, or replace duplicated k3d/EG lifecycle helpers with the library. Use for consumer setup, embedded Helm fixtures, cleanup, and CI live checks; not for general Kubernetes deployment.
 ---
 
 # Use egtest in a Go project
@@ -23,9 +23,10 @@ Go module just for the tests unless isolation actually requires it.
 
 Check the API of the revision being consumed with `go doc` or its downloaded
 source. The [README](https://github.com/dio/egtest/blob/main/README.md) documents the
-current API; [VERIFICATION.md](https://github.com/dio/egtest/blob/main/VERIFICATION.md)
-separates installation evidence from unqualified application behavior. Neither
-page overrides the API of an older pinned revision.
+current API and coverage limits;
+[GitHub Actions](https://github.com/dio/egtest/actions/workflows/test.yaml) provides
+current results and per-run artifacts. Neither overrides the API of an older
+pinned revision.
 
 ## Add the dependency and readable fixtures
 
@@ -87,7 +88,7 @@ Ordinary test failures should still attempt cleanup.
 ## Verify the integration
 
 Keep expensive tests explicitly gated according to the consumer's conventions.
-A skipped live test is not installation evidence. Run focused compilation and
+A skipped live test is not live qualification evidence. Run focused compilation and
 existing relevant tests first. Run the live lane on an authorized suitable host
 or the project's CI; do not silently switch to a shared cluster or provision a
 cloud build host when local prerequisites are missing.
@@ -95,7 +96,8 @@ cloud build host when local prerequisites are missing.
 Distinguish three levels of evidence:
 
 - Fake-command tests verify lifecycle/error handling without real Kubernetes.
-- The real install lane verifies the node, pinned versions, EG/CRDs and cleanup.
+- The library live lane verifies installation, image import, readiness, forwarding,
+  retention and removal using a generic fixture; see README for platform coverage.
 - Consumer tests verify active Envoy topology, responses and backend behavior.
 
 Controller `Programmed` status alone does not prove Envoy accepted an xDS update
@@ -108,7 +110,7 @@ ordinary prerequisite errors separately. Cleanup failure and deliberate retentio
 must remain visible. Never log Secrets, raw Envoy config, credentials or command
 stdin; raw `Kubectl` stdout can contain such data.
 
-If adding CI, keep unit/race checks separate from a real install job, pin tool
+If adding CI, keep unit/race checks separate from a real cluster job, pin tool
 versions and current official action releases, and upload only safe result data.
 Report which gates actually ran, their outcomes, remaining limitations and any
 retained resources. Do not claim a platform or consumer boundary from compilation
