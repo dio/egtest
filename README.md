@@ -138,6 +138,25 @@ to the caller. k3d-owned containers, network and image volume belong to egtest.
 Process termination by SIGKILL cannot execute Go cleanup; use recorded ownership
 information for manual removal. This package has no persistent daemon or janitor.
 
+## Agent usage skill
+
+The [use-egtest skill](skills/use-egtest/SKILL.md) guides an agent through adopting
+the library in another Go project: dependency pinning, embedded YAML, lifecycle
+ownership, application assertions and CI evidence.
+
+From this checkout, install it for Codex:
+
+```sh
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/use-egtest "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+Reload skills or start a new session, then invoke:
+
+```text
+Use $use-egtest to integrate egtest into this project's Envoy Gateway tests.
+```
+
 ## Local development
 
 Agent-assisted contributors and consumers can follow [AGENTS.md](AGENTS.md) for

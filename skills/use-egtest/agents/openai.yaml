@@ -1,0 +1,4 @@
+interface:
+  display_name: "Use egtest"
+  short_description: "Add owned Envoy Gateway fixtures to Go tests"
+  default_prompt: "Use $use-egtest to integrate egtest into this project's Envoy Gateway tests."
