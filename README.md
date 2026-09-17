@@ -1,12 +1,15 @@
 # egtest
 
+[![test](https://github.com/dio/egtest/actions/workflows/test.yaml/badge.svg)](https://github.com/dio/egtest/actions/workflows/test.yaml)
+
 Disposable **k3d + Envoy Gateway** fixtures for Go tests. Each fixture owns one
 single-server cluster, a private kubeconfig, and its port-forward processes.
 Setup failure and cancellation trigger cleanup. No current-context changes,
 cluster adoption, registry publishing, or testify dependency.
 
-This module is experimental. Fake-process lifecycle tests pass; live Envoy
-Gateway installation has not yet been qualified with this extracted package.
+This module is experimental. CI verifies unit/race tests on Linux and macOS and
+real EG installation/cleanup on Linux. Application forwarding remains a consumer
+responsibility; see [the verification record](VERIFICATION.md).
 
 ## Install
 
@@ -15,7 +18,8 @@ go get github.com/dio/egtest@latest
 ```
 
 The initial publication uses the revision on `main`; Go records its pseudo-version
-in your `go.mod`. No stable API or qualified EG/Kubernetes pairing is promised yet.
+in your `go.mod`. The API is experimental; installation evidence does not establish
+application or extension compatibility.
 
 ## Use
 
@@ -48,8 +52,9 @@ func TestGateway(t *testing.T) {
 ```
 
 Import `github.com/dio/egtest`, `os`, and `testing`; supply your project's
-`gatewayManifest`. Version values above are candidate pins, not a supported-pair
-claim. `New` registers cleanup on the parent test, so the cluster remains alive
+`gatewayManifest`. The version pins above passed the Linux CI installation gate;
+application behavior still needs its own tests. `New` registers cleanup on the
+parent test, so the cluster remains alive
 through parallel subtests. Do not use `defer cluster.Close()` on a parent with
 parallel subtests.
 
@@ -124,6 +129,12 @@ of the consumer's committed `go.mod`. Consumers and Docker builds can otherwise
 use the published revision through normal Go module tooling.
 
 ## Verification
+
+CI runs vet, race tests and formatting checks on Linux and macOS with Go 1.25 and
+1.27. A separate Linux/amd64 job installs pinned k3d, kubectl and Helm, creates
+the real cluster, verifies installation and removal, and uploads a safe JSON
+result. All action references use the official releases checked at publication:
+checkout `v7.0.1`, setup-go `v7.0.0`, and upload-artifact `v7.0.1`.
 
 ```sh
 make check
