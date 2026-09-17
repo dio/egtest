@@ -10,10 +10,11 @@ trap 'rm -rf "$task_tools_dir"' EXIT
 cd "$task_tools_dir"
 
 k3d_version=v5.8.3
-curl --fail --location --retry 3 -o k3d-linux-amd64 "https://github.com/k3d-io/k3d/releases/download/$k3d_version/k3d-linux-amd64"
+mkdir _dist
+curl --fail --location --retry 3 -o _dist/k3d-linux-amd64 "https://github.com/k3d-io/k3d/releases/download/$k3d_version/k3d-linux-amd64"
 curl --fail --location --retry 3 -o checksums.txt "https://github.com/k3d-io/k3d/releases/download/$k3d_version/checksums.txt"
 sha256sum --check --ignore-missing checksums.txt
-sudo install -m 0755 k3d-linux-amd64 /usr/local/bin/k3d
+sudo install -m 0755 _dist/k3d-linux-amd64 /usr/local/bin/k3d
 
 kubectl_version=v1.33.0
 curl --fail --location --retry 3 -o kubectl "https://dl.k8s.io/release/$kubectl_version/bin/linux/amd64/kubectl"
