@@ -1,0 +1,9 @@
+egtest
+
+Lifecycle and Envoy Gateway harness patterns adapted from dio/transit:
+https://github.com/dio/transit
+Revision: 0411a9e53727bb9700f88493e97250ea8176c09d
+Source: integrations/internal/egtest/egtest.go
+Licensed under Apache License, Version 2.0.
+
+Includes private-cluster lifecycle patterns developed in APIx's e2e/eg harness.
