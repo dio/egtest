@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: egtest-server-side
+  namespace: default
+data:
+  smoke: scoped-server-side-apply

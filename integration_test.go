@@ -27,6 +27,9 @@ var helmValues []byte
 //go:embed testdata/surface.yaml
 var surfaceManifest string
 
+//go:embed testdata/server-side.yaml
+var serverSideManifest []byte
+
 const backendImage = "busybox:1.37.0-musl@sha256:fc6dddc4c44b1bfe37f41cae8e67d1693828e8f42a91862816d7953e2c9d3f23"
 
 type liveReport struct {
@@ -116,7 +119,7 @@ func testLiveSurface(t *testing.T, ctx context.Context, opts egtest.Options, rep
 	if err := c.Apply(ctx, manifest.Bytes()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Kubectl(ctx, manifest.Bytes(), "apply", "--server-side", "-f", "-"); err != nil {
+	if _, err := c.Kubectl(ctx, serverSideManifest, "apply", "--server-side", "-f", "-"); err != nil {
 		t.Fatal(err)
 	}
 	for _, deployment := range [][2]string{{"envoy-gateway-system", "envoy-gateway"}, {"default", "backend"}} {
